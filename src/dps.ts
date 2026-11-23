@@ -17,8 +17,8 @@ import {
   type DPS,
   type InfoPessoa,
 } from 'open-nfse';
-import type { Cliente, Empresa } from './config.js';
-import type { Cotacao } from './cotacao.js';
+import type { Cliente, Empresa } from './validacao';
+import type { Cotacao } from './cotacao';
 
 export const VERSAO_APP = 'lweiss-emissor/1.0';
 

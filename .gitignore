@@ -8,3 +8,9 @@ notas/
 config/empresa.json
 config/clientes/*.json
 !config/clientes/*.exemplo.json
+
+# Next.js
+.next/
+next-env.d.ts
+*.tsbuildinfo
+.vercel

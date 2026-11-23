@@ -8,15 +8,28 @@
     "nota": "tsx src/cli.ts nota",
     "consultar": "tsx src/cli.ts consultar",
     "cancelar": "tsx src/cli.ts cancelar",
-    "pdf": "tsx src/cli.ts pdf"
+    "pdf": "tsx src/cli.ts pdf",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "tipos": "tsc -p .",
+    "teste:web": "tsx --test web/emissao.test.ts"
   },
   "license": "UNLICENSED",
   "dependencies": {
+    "next": "16.4.6",
     "open-nfse": "0.11.1",
+    "pg": "8.23.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
     "tsx": "4.23.15"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0"
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.23.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "typescript": "^7.0.2"
   },
   "private": true,
   "type": "module",
