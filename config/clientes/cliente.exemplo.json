@@ -1,0 +1,43 @@
+{
+  "_ajuda": "Copie para config/clientes/<apelido>.json (ex.: meucliente.json). O apelido é o que você digita no comando: npm run nota -- meucliente --valor 2500",
+
+  "nome": "PREENCHER Razão social do cliente",
+
+  "_nif": "Tax ID do cliente no país dele (nos EUA, o EIN). Se não tiver, deixe vazio e o app informa 'NIF não exigido'.",
+  "nif": "",
+
+  "email": "",
+
+  "endereco": {
+    "pais": "US",
+    "logradouro": "PREENCHER Rua / Street",
+    "numero": "PREENCHER",
+    "complemento": "",
+    "_bairro": "Obrigatório no leiaute. Endereços dos EUA não têm bairro: use o nome da cidade ou 'Downtown'.",
+    "bairro": "PREENCHER",
+    "cidade": "PREENCHER",
+    "estado": "PREENCHER (ex.: FL)",
+    "codigoPostal": "PREENCHER (ex.: 33101)"
+  },
+
+  "_moeda": "Moeda da invoice. USD e EUR já vêm mapeados para o código do Banco Central.",
+  "moeda": "USD",
+
+  "_paisResultado": "País onde o resultado do serviço acontece (sigla de 2 letras). É o que caracteriza a exportação.",
+  "paisResultado": "US",
+
+  "_descricao": "Texto da nota. Variáveis: {mes} {ano} {mesAno}. Pode ser trocado na hora com --descricao.",
+  "descricao": "Serviços de design de interface (UX/UI) referentes a {mesAno}.",
+
+  "_servico": "Opcional: sobrescreve os códigos da empresa só para este cliente.",
+  "servico": {},
+
+  "_comercioExterior": "Valores padrão de exportação. Só mude se o contador pedir. modoPrestacao 1 = transfronteiriço (você no Brasil, cliente lá fora). vinculo 0 = sem vínculo. mecanismos 01 = nenhum. enviarMDIC 0 = não compartilhar com a Secex.",
+  "comercioExterior": {
+    "modoPrestacao": "1",
+    "vinculo": "0",
+    "mecanismoApoioPrestador": "01",
+    "mecanismoApoioTomador": "01",
+    "enviarMDIC": "0"
+  }
+}

@@ -1,0 +1,10 @@
+node_modules/
+.env
+certificado/
+*.pfx
+*.p12
+dados/
+notas/
+config/empresa.json
+config/clientes/*.json
+!config/clientes/*.exemplo.json

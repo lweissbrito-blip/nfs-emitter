@@ -1,0 +1,26 @@
+{
+  "name": "emissor-nfse-lweiss",
+  "version": "1.0.0",
+  "description": "Emissor de NFS-e (padrão nacional) para exportação de serviços — LWEISS",
+  "scripts": {
+    "verificar": "tsx src/cli.ts verificar",
+    "cotacao": "tsx src/cli.ts cotacao",
+    "nota": "tsx src/cli.ts nota",
+    "consultar": "tsx src/cli.ts consultar",
+    "cancelar": "tsx src/cli.ts cancelar",
+    "pdf": "tsx src/cli.ts pdf"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "open-nfse": "0.11.1",
+    "tsx": "4.23.15"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0"
+  },
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.12"
+  }
+}

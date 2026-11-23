@@ -1,0 +1,28 @@
+{
+  "_ajuda": "Copie para config/empresa.json e preencha. Campos com 'PREENCHER' ou zeros bloqueiam a emissão até serem trocados.",
+
+  "cnpj": "00000000000000",
+
+  "_inscricaoMunicipal": "Só preencha se a prefeitura te deu uma Inscrição Municipal. Se a Receita rejeitar com E0116, ela é obrigatória; com E0120, apague.",
+  "inscricaoMunicipal": "",
+
+  "_codigoMunicipio": "Código IBGE (7 dígitos) do município do endereço do CNPJ. Itaquaquecetuba = 3523107.",
+  "codigoMunicipio": "3523107",
+
+  "_serie": "Série das notas emitidas por este app. Tem que estar entre 1 e 49999 (faixa de 'aplicativo próprio'). O emissor web usa 70000+, então não há conflito.",
+  "serie": "1",
+
+  "_aliquotaSimplesAproximada": "Alíquota aproximada do Simples Nacional, em % (ex.: 6 = 6%). Peça ao seu contador.",
+  "aliquotaSimplesAproximada": 0,
+
+  "_servico": "Códigos padrão do seu serviço. Pegue de uma nota já emitida pelo site ou com o contador. Cada cliente pode sobrescrever.",
+  "servico": {
+    "codigoTributacaoNacional": "000000",
+    "codigoNBS": "000000000"
+  },
+
+  "_cotacao": "Critério de conversão: PTAX do Banco Central, dia útil anterior à emissão. 'tipo' = venda ou compra. Confirme o critério com o contador.",
+  "cotacao": {
+    "tipo": "venda"
+  }
+}
