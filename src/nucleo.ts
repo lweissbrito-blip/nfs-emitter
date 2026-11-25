@@ -50,6 +50,8 @@ export const DICAS: Record<string, string> = {
   E0018: 'A competência é anterior à abertura do CNPJ.',
   E0529: 'A Receita não aceita exportação para esse cenário. Confirme a tributação com o contador.',
   E0166: 'Regime de apuração do Simples ausente — problema no app, me avise.',
+  E0039: 'O município não está liberado para os emissores nacionais NESTE ambiente. No ambiente de testes isso é comum (configuração da prefeitura no servidor de testes) e não indica problema na produção.',
+  E1235: 'O XML não segue o leiaute que a Receita espera. Se acontecer perto de uma virada de leiaute (ex.: NT 009 em 01/12/2026), veja NFSE_LEIAUTE_PRODUCAO no README.',
   E1200: 'Certificado de transmissão inválido (precisa ser e-CNPJ com "Autenticação de Cliente").',
 };
 
