@@ -13,7 +13,7 @@ import { hojeBrasilia } from '../src/cotacao';
 import * as arm from './armazem';
 import { salvarCliente, salvarEmpresa } from './config';
 import { fecharConexao, sql } from './db';
-import { cancelar, emitir, pdfDeNfse, previa, usarFabricaApi, verificarPendente } from './emissao';
+import { cancelar, emitir, verificar, pdfDeNfse, previa, usarFabricaApi, verificarPendente } from './emissao';
 
 if (!/localhost|127\.0\.0\.1/.test(process.env.DATABASE_URL ?? '')) {
   throw new Error('Os testes só rodam contra um Postgres local (DATABASE_URL com localhost).');
@@ -168,3 +168,20 @@ async function montarParaTeste(nDPS: string) {
     competencia: pedido.competencia, descricao: preencherDescricao(cliente.descricao, pedido.competencia),
   });
 }
+
+test('teste de conexão usa a SEFIN e trata o ADN fora do ar como aviso', async () => {
+  const original = fake.consultarConvenio.bind(fake);
+  fake.consultarConvenio = async () => {
+    throw new (await import('open-nfse')).NetworkError('ECONNRESET');
+  };
+  try {
+    const itens = await verificar({ producao: false });
+    const conexao = itens.find((i) => i.nome.startsWith('Conexão'));
+    const convenio = itens.find((i) => i.nome.startsWith('Convênio'));
+    assert.equal(conexao?.ok, true, JSON.stringify(itens));
+    assert.equal(convenio?.ok, 'aviso');
+    assert.match(convenio!.detalhe, /ECONNRESET/);
+  } finally {
+    fake.consultarConvenio = original;
+  }
+});

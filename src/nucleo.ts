@@ -61,7 +61,11 @@ export function explicarErro(e: unknown): string {
   if (e instanceof UnauthorizedError) return 'A Receita recusou o certificado (401).';
   if (e instanceof ForbiddenError) return 'A Receita recusou o acesso (403): o certificado não tem permissão para esse CNPJ.';
   if (e instanceof TimeoutError) return 'A Receita demorou demais para responder.';
-  if (e instanceof NetworkError) return 'Sem conexão com a Receita (internet ou servidor fora do ar).';
+  if (e instanceof NetworkError) {
+    const causa = (e as { cause?: { code?: string; message?: string } }).cause;
+    const detalhe = [causa?.code, causa?.message ?? e.message].filter(Boolean).join(': ');
+    return `Sem conexão com a Receita (internet ou servidor fora do ar)${detalhe ? ` — detalhe técnico: ${detalhe}` : ''}.`;
+  }
   if (e instanceof RuleViolationError || e instanceof ValidationError) return `Validação local: ${e.message}`;
   if (e instanceof OpenNfseError) return e.message;
   return e instanceof Error ? e.message : String(e);

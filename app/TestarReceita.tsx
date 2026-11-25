@@ -10,7 +10,7 @@ export function TestarReceita() {
   const testar = (producao: boolean) =>
     iniciar(async () => {
       const r = await acaoVerificar({ producao });
-      setItens(r.filter((i) => i.nome.startsWith('Conexão') || i.nome === 'Certificado'));
+      setItens(r.filter((i) => i.nome.startsWith('Conexão') || i.nome.startsWith('Convênio') || i.nome === 'Certificado'));
     });
   return (
     <>

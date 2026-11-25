@@ -9,6 +9,7 @@
  */
 import {
   Ambiente,
+  buildDpsId,
   createInMemoryRetryStore,
   ForbiddenError,
   gerarDanfse,
@@ -443,17 +444,34 @@ export async function verificar(testarReceita: false | { producao: boolean }): P
     const nome = testarReceita.producao ? 'produção' : 'testes';
     const api = fabricaApi(testarReceita.producao, cert.pfx, cert.senha);
     try {
+      // A emissão, a consulta e o cancelamento vão para a SEFIN. Consulta o status de uma
+      // DPS que não existe (série 49999, último número possível): responder "não existe"
+      // prova que o certificado foi aceito no mTLS. Nada é enviado.
+      const idInexistente = buildDpsId({
+        cLocEmi: empresa.codigoMunicipio,
+        tipoInsc: 'CNPJ',
+        inscricaoFederal: empresa.cnpj,
+        serie: '49999',
+        nDPS: '999999999999999',
+      });
+      await api.existsDpsStatus(idInexistente);
+      add(`Conexão com a Receita (${nome})`, true, 'SEFIN (emissão) aceitou o certificado — pronto para emitir.');
+    } catch (e) {
+      add(`Conexão com a Receita (${nome})`, false, explicarErro(e));
+    }
+    try {
+      // Parâmetros municipais ficam em outro servidor (ADN); se ele estiver fora, a emissão não é afetada.
       const r = await api.consultarConvenio(empresa.codigoMunicipio);
       const pc = r.parametrosConvenio;
       add(
-        `Conexão com a Receita (${nome})`,
+        `Convênio do município (${nome})`,
         true,
         pc
-          ? `mTLS OK. Município aderente ao Emissor Nacional: ${pc.aderenteEmissorNacional}; ao Ambiente Nacional: ${pc.aderenteAmbienteNacional}`
-          : `mTLS OK. ${r.mensagem ?? ''}`,
+          ? `Aderente ao Emissor Nacional: ${pc.aderenteEmissorNacional}; ao Ambiente Nacional: ${pc.aderenteAmbienteNacional}`
+          : r.mensagem ?? 'consultado',
       );
     } catch (e) {
-      add(`Conexão com a Receita (${nome})`, false, explicarErro(e));
+      add(`Convênio do município (${nome})`, 'aviso', `Consulta indisponível (servidor ADN): ${explicarErro(e)} Não afeta a emissão.`);
     } finally {
       await api.close();
     }
