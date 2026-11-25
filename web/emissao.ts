@@ -22,10 +22,12 @@ import {
   TipoAmbienteDps,
   UnauthorizedError,
   ValidationError,
+  type Layout,
   type NFSe,
 } from 'open-nfse';
 import type { NfseClientLike } from 'open-nfse/testing';
 import { buscarPtax, hojeBrasilia, type Cotacao } from '../src/cotacao';
+import { leiauteDe } from '../src/leiaute';
 import { montarDps, preencherDescricao } from '../src/dps';
 import { DICAS, explicarErro, observacoesDanfse } from '../src/nucleo';
 import * as arm from './armazem';
@@ -33,8 +35,10 @@ import { carregarCertificado, carregarCliente, carregarEmpresa, listarClientesBr
 
 type Api = NfseClientLike;
 
-let fabricaApi = (producao: boolean, pfx: Buffer, senha: string): Api =>
+/** O leiaute do cliente e o da DPS têm que ser o mesmo: calcule uma vez e passe para os dois. */
+let fabricaApi = (producao: boolean, pfx: Buffer, senha: string, layout: Layout = leiauteDe(producao)): Api =>
   new NfseClient({
+    layout,
     ambiente: producao ? Ambiente.Producao : Ambiente.ProducaoRestrita,
     certificado: { pfx, password: senha },
     timeoutMs: 60_000,
@@ -133,12 +137,13 @@ export async function previa(p: Pedido): Promise<Previa> {
   const descricao = preencherDescricao(p.descricao?.trim() || cliente.descricao, p.competencia);
   if (descricao.length > 2000) throw new Error('A descrição passou de 2000 caracteres.');
   const nDPS = await arm.proximoNumero(amb, empresa.serie);
+  const layout = leiauteDe(p.producao);
   const nota = montarDps({
-    empresa, cliente, nDPS, producao: p.producao, valorMoeda: p.valorMoeda, cotacao,
+    layout, empresa, cliente, nDPS, producao: p.producao, valorMoeda: p.valorMoeda, cotacao,
     competencia: p.competencia, descricao,
   });
 
-  const api = fabricaApi(p.producao, cert.pfx, cert.senha);
+  const api = fabricaApi(p.producao, cert.pfx, cert.senha, layout);
   try {
     await api.emitirDpsPronta(nota.dps, { dryRun: true, skipCepValidation: true });
   } finally {
@@ -256,7 +261,8 @@ export async function emitir(p: Pedido, cotacao: Cotacao): Promise<Resultado> {
     if (cert.dias < 0) throw new Error('O certificado está vencido.');
     if (cotacao.moeda !== cliente.moeda || !(cotacao.valor > 0)) throw new Error('Cotação inválida — refaça a prévia.');
     const amb = arm.nomeAmb(p.producao);
-    api = fabricaApi(p.producao, cert.pfx, cert.senha);
+    const layout = leiauteDe(p.producao);
+    api = fabricaApi(p.producao, cert.pfx, cert.senha, layout);
 
     const pend = await resolverPendente(api, p.producao);
     if (pend !== 'livre') return { tipo: 'pendente-resolvida', nota: pend };
@@ -264,7 +270,7 @@ export async function emitir(p: Pedido, cotacao: Cotacao): Promise<Resultado> {
     const descricao = preencherDescricao(p.descricao?.trim() || cliente.descricao, p.competencia);
     const nDPS = await arm.proximoNumero(amb, empresa.serie);
     const nota = montarDps({
-      empresa, cliente, nDPS, producao: p.producao, valorMoeda: p.valorMoeda, cotacao,
+      layout, empresa, cliente, nDPS, producao: p.producao, valorMoeda: p.valorMoeda, cotacao,
       competencia: p.competencia, descricao,
     });
 

@@ -31,6 +31,7 @@ import {
   TipoAmbienteDps,
   UnauthorizedError,
   ValidationError,
+  type Layout,
   type NFSe,
 } from 'open-nfse';
 import type { NfseClientLike } from 'open-nfse/testing';
@@ -43,6 +44,7 @@ import {
   type Empresa,
 } from './config';
 import { buscarPtax, hojeBrasilia, type Cotacao } from './cotacao';
+import { leiauteDe } from './leiaute';
 import { brl, dataBr, montarDps, moeda, preencherDescricao } from './dps';
 import { Armazem } from './estado';
 import { DICAS, explicarErro, observacoesDanfse } from './nucleo';
@@ -109,8 +111,10 @@ function prepararCertificado(empresa?: Empresa) {
 
 type Api = NfseClientLike;
 
-let fabricaApi = (producao: boolean, pfx: Buffer, senha: string): Api =>
+/** O leiaute do cliente e o da DPS têm que ser o mesmo: calcule uma vez e passe para os dois. */
+let fabricaApi = (producao: boolean, pfx: Buffer, senha: string, layout: Layout = leiauteDe(producao)): Api =>
   new NfseClient({
+    layout,
     ambiente: producao ? Ambiente.Producao : Ambiente.ProducaoRestrita,
     certificado: { pfx, password: senha },
     timeoutMs: 60_000,
@@ -121,7 +125,8 @@ export function usarFabricaApi(f: typeof fabricaApi) {
   fabricaApi = f;
 }
 
-const criarApi = (producao: boolean, pfx: Buffer, senha: string) => fabricaApi(producao, pfx, senha);
+const criarApi = (producao: boolean, pfx: Buffer, senha: string, layout?: Layout) =>
+  fabricaApi(producao, pfx, senha, layout);
 
 // ---------------------------------------------------------------------------
 // Salvar nota autorizada (XML + PDF)
@@ -319,7 +324,8 @@ export async function cmdNota(apelido: string | undefined, v: Record<string, str
   if (c.dias < 30) aviso(`seu certificado vence em ${c.dias} dias — providencie a renovação.`);
 
   const arm = new Armazem(producao);
-  const api = criarApi(producao, c.pfx, c.senha);
+  const layout = leiauteDe(producao);
+  const api = criarApi(producao, c.pfx, c.senha, layout);
   try {
     if (!simular && (await resolverPendente(api, arm)) === 'emitida') {
       console.log('\nSe você precisa de mais uma nota, rode o comando de novo.');
@@ -343,7 +349,7 @@ export async function cmdNota(apelido: string | undefined, v: Record<string, str
     if (descricao.length > 2000) throw new Error('A descrição passou de 2000 caracteres.');
 
     const nDPS = arm.proximoNumero(empresa.serie);
-    const nota = montarDps({ empresa, cliente, nDPS, producao, valorMoeda, cotacao, competencia, descricao });
+    const nota = montarDps({ layout, empresa, cliente, nDPS, producao, valorMoeda, cotacao, competencia, descricao });
 
     // Validação local completa (XSD oficial + assinatura) antes de qualquer envio.
     const previa = await api.emitirDpsPronta(nota.dps, { dryRun: true, skipCepValidation: true });

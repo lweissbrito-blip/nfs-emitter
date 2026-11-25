@@ -8,6 +8,8 @@ A single-user tool that issues Brazilian **NFS-e for service exports** through t
 
 All communication with the tax authority (XML signing, mTLS, XSD validation, DPS id, PDF rendering, typed errors) is done by the unofficial `open-nfse` library, pinned to an exact version in `package.json` on purpose. Don't loosen the pin.
 
+It is pinned to the release candidate `0.12.0-rc.1` because 0.11 only builds the old layout. The DPS layout changes with NT 009/2026: the test environment (Produção Restrita) has required `nt009` since 2026-10-20 (otherwise E1235 schema errors such as "invalid child element cLocEmi … expected finNFSe"), and production switches from `nt004` to `nt009` on 2026-12-01. `src/leiaute.ts` (`leiauteDe`) picks it: tests always `nt009`; production by Brasília date, overridable with `NFSE_LEIAUTE_PRODUCAO=nt004|nt009` if the Receita moves the date. Compute the layout once per operation and pass the same value to the `NfseClient` (`layout` option) and to `montarDps` (they must match, or the lib throws `LayoutMismatchError`). Move to `0.12.0` final when it ships. Future NT 009 releases come as new RCs.
+
 ## Commands
 
 Node ≥ 20.12. `npm install` once.
@@ -30,7 +32,7 @@ Web app and checks:
 ```bash
 npm run dev | build        # Next.js; needs DATABASE_URL, APP_SENHA, APP_SEGREDO, CERT_PFX_BASE64, CERT_SENHA
 npm run tipos              # tsc (noEmit, strict) over src/, web/, app/
-npm run teste:web          # node:test, web emission flow vs NfseClientFake; needs a LOCAL Postgres (drops tables)
+npm run teste:web          # node:test: web emission flow vs NfseClientFake (LOCAL Postgres, drops tables) + real-XSD dry run of our DPS in both layouts
 npx tsx --test --test-name-pattern "rejeição" web/emissao.test.ts   # single test
 ```
 
@@ -48,12 +50,13 @@ Relative imports are extensionless (`'./dps'`): Turbopack doesn't map `.js` → 
 - `src/validacao.ts`: pure validation of empresa/cliente objects (`validarEmpresa`, `validarCliente`). Collects all problems and throws `ErroConfig` with the full list. Rejects placeholder values (`PREENCHER`, all-zero codes). Maps ISO currency to BACEN codes (`MOEDAS_BACEN`: USD=220, EUR=978). Used by both front-ends.
 - `src/config.ts` (CLI only): reads `config/*.json` and `.env` and calls `validacao`. `RAIZ` uses `import.meta.dirname`, so web code must never import `config.ts`, `estado.ts` or `cli.ts`.
 - `src/nucleo.ts`: `explicarErro`, `DICAS` (Receita rejection codes → hints) and `observacoesDanfse()`, shared by both.
-- `src/dps.ts`: `montarDps()` is a pure function that builds the DPS object. Each hard-coded field choice there exists to satisfy a specific Receita validation rule (E0330, E0223, E0166, E0602…, listed in the doc comment and in README §6). Check those rules before changing a field. Text fields go through `latin1()` because the layout only accepts Latin-1. `dhEmi` is backdated 1 minute to avoid E0008.
+- `src/dps.ts`: `montarDps()` is a pure function that builds the DPS object for the given `layout` (`nt009` adds `finNFSe = 0`; the lib serializes in XSD order). Each hard-coded field choice there exists to satisfy a specific Receita validation rule (E0330, E0223, E0166, E0602…, listed in the doc comment and in README §6). Check those rules before changing a field. Text fields go through `latin1()` because the layout only accepts Latin-1. `dhEmi` is backdated 1 minute to avoid E0008.
 - `src/cotacao.ts`: BCB PTAX (Olinda API). Uses the business day **before** the issue date, walking back over weekends and holidays. Dates are handled as `AAAA-MM-DD` strings in the Brasília timezone (`hojeBrasilia()`), never the machine's local timezone.
 - `src/estado.ts`: `Armazem` holds local state per environment (`dados/{producao,testes}/` and `notas/{producao,testes}/`, numbered independently): last DPS number per series, the single **pending** emission, and the `notas.csv` log (`;`-separated, decimal comma for Excel pt-BR). `estado.json` is written atomically (tmp file + rename).
 
 ### Web app (`web/` server logic, `app/` Next.js App Router)
 
+- The Painel connection test does a `HEAD /dps/{id}` on SEFIN for a DPS id that can't exist (series 49999). That's the server used for emission, status and cancellation. The municipal-agreement lookup goes to a different server (ADN), which is often down in the test environment, so a failure there is only a warning.
 - `web/emissao.ts` ports `cmdNota`/`resolverPendente` (`previa`, `emitir`, `verificarPendente`, `cancelar`, `importarPorChave`, `verificar`, `pdfDaNota`) and returns result objects instead of printing. `usarFabricaApi()` swaps in the fake for tests.
 - `web/armazem.ts` is the DB equivalent of `Armazem`. `reservar()` is the lock: an `UPDATE … WHERE pendente IS NULL AND ultimo+1 = nDPS`. `liberar()` only clears the pending entry with a matching `idDps`.
 - `web/db.ts` creates the schema lazily (`create table if not exists`) on first query. No migration tool.

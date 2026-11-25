@@ -155,6 +155,7 @@ Nome e endereço da sua empresa **não** vão na DPS: a Receita preenche pelo ca
 
 ## 7. Atenção
 
+- **Leiaute NT 009.** O ambiente de testes da Receita usa o leiaute novo (NT 009) desde 20/10/2026, e a produção passa para ele em 01/12/2026. O app escolhe sozinho (`src/leiaute.ts`). Se a Receita adiar a data, defina `NFSE_LEIAUTE_PRODUCAO=nt004` nas variáveis da Vercel. A biblioteca está numa versão *release candidate* (`0.12.0-rc.1`), a única com o leiaute novo: atualize para a `0.12.0` final quando sair.
 - **IBS/CBS (Reforma Tributária).** Para o Simples Nacional, os campos de IBS/CBS passam a valer em **1º/01/2027**. Antes da primeira nota de 2027, rode `npm update open-nfse` e reveja com o contador se algo muda na nota.
 - **PDF.** É gerado localmente (o serviço oficial de PDF da Receita está suspenso, segundo a documentação da biblioteca usada). O que vale juridicamente é o XML. Use `consultar` para baixar uma nota de novo quando precisar.
 - **Biblioteca.** A comunicação com a Receita (assinatura, mTLS, validação do schema) usa a [open-nfse](https://github.com/fm-s/open-nfse), open source (MIT) e **não oficial**. A versão está fixada no `package.json` para nada mudar sem você saber.

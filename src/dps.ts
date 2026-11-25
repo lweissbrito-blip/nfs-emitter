@@ -14,8 +14,10 @@ import {
   TipoRetISSQN,
   TipoTribISSQN,
   VinculoPrestacao,
+  FinalidadeNFSe,
   type DPS,
-  type InfoPessoa,
+  type InfoPessoaNt004,
+  type Layout,
 } from 'open-nfse';
 import type { Cliente, Empresa } from './validacao';
 import type { Cotacao } from './cotacao';
@@ -72,6 +74,8 @@ export function preencherDescricao(modelo: string, competenciaIso: string): stri
 }
 
 export interface DadosNota {
+  /** Leiaute da DPS (ver src/leiaute.ts) — tem que ser o mesmo do NfseClient. */
+  layout: Layout;
   empresa: Empresa;
   cliente: Cliente;
   nDPS: string;
@@ -116,7 +120,7 @@ export function montarDps(d: DadosNota): NotaMontada {
   });
 
   const e = cliente.endereco;
-  const toma: InfoPessoa = {
+  const toma: InfoPessoaNt004 = {
     identificador: cliente.nif ? { NIF: cliente.nif } : { cNaoNIF: CodigoNaoNif.NaoExigido },
     xNome: latin1(cliente.nome),
     end: {
@@ -146,9 +150,9 @@ export function montarDps(d: DadosNota): NotaMontada {
 
   const ce = cliente.comercioExterior;
 
-  const dps: DPS = {
-    versao: '1.01',
-    infDPS: {
+  // Campos comuns aos dois leiautes. Na NT 009 a única diferença que nos afeta é
+  // `finNFSe` (finalidade: 0 = NFS-e regular) logo depois de tpEmit.
+  const infDPS = {
       Id: idDps,
       tpAmb: d.producao ? TipoAmbienteDps.Producao : TipoAmbienteDps.Homologacao,
       // 1 min de folga: a Receita rejeita dhEmi "no futuro" (E0008) se o relógio estiver adiantado.
@@ -203,8 +207,20 @@ export function montarDps(d: DadosNota): NotaMontada {
           totTrib: { pTotTribSN: arred2(empresa.aliquotaSimplesAproximada) },
         },
       },
-    },
   };
+
+  let dps: DPS;
+  switch (d.layout) {
+    case 'nt004':
+      dps = { layout: 'nt004', versao: '1.01', infDPS };
+      break;
+    case 'nt009':
+      // O serializer da lib escreve os campos na ordem do XSD.
+      dps = { layout: 'nt009', versao: '1.01', infDPS: { ...infDPS, finNFSe: FinalidadeNFSe.Regular } };
+      break;
+    default:
+      throw new Error(`Leiaute desconhecido: ${String(d.layout)}`);
+  }
 
   return { dps, idDps, valorReais, infoComplementar };
 }

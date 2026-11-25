@@ -7,6 +7,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
+import type { DpsNt009 } from 'open-nfse';
 import { NfseClientFake } from 'open-nfse/testing';
 import type { Cotacao } from '../src/cotacao';
 import { hojeBrasilia } from '../src/cotacao';
@@ -19,7 +20,7 @@ if (!/localhost|127\.0\.0\.1/.test(process.env.DATABASE_URL ?? '')) {
   throw new Error('Os testes só rodam contra um Postgres local (DATABASE_URL com localhost).');
 }
 
-const fake = new NfseClientFake();
+const fake = new NfseClientFake({ layout: 'nt009' });
 fake.close = async () => {}; // o mesmo fake é reaproveitado entre chamadas
 usarFabricaApi(() => fake);
 
@@ -122,7 +123,7 @@ test('pendente que virou nota é recuperado, sem emitir outra', async () => {
   // Simula: a nota nº 3 foi enviada e autorizada, mas a resposta se perdeu.
   const antes = (await arm.listarNotas('testes')).length;
   const nota3 = await montarParaTeste('3');
-  await fake.emitirDpsPronta(nota3.dps, { skipCepValidation: true });
+  await fake.emitirDpsPronta(nota3.dps as DpsNt009, { skipCepValidation: true });
   await arm.reservar('testes', {
     nDPS: '3', serie: '1', idDps: nota3.idDps, cliente: 'acme',
     valorMoeda: 2500, moeda: 'USD', valorReais: 13750, cotacao: 5.5, competencia: pedido.competencia,
@@ -164,7 +165,7 @@ async function montarParaTeste(nDPS: string) {
   const empresa = await carregarEmpresa();
   const cliente = await carregarCliente('acme', empresa);
   return montarDps({
-    empresa, cliente, nDPS, producao: false, valorMoeda: 2500, cotacao,
+    layout: 'nt009', empresa, cliente, nDPS, producao: false, valorMoeda: 2500, cotacao,
     competencia: pedido.competencia, descricao: preencherDescricao(cliente.descricao, pedido.competencia),
   });
 }
