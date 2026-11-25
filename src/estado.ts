@@ -6,7 +6,7 @@
  */
 import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { RAIZ } from './config.js';
+import { RAIZ } from './config';
 
 export interface Pendente {
   nDPS: string;

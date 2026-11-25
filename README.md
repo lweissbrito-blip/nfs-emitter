@@ -155,6 +155,7 @@ Nome e endereço da sua empresa **não** vão na DPS: a Receita preenche pelo ca
 
 ## 7. Atenção
 
+- **Leiaute NT 009.** O ambiente de testes da Receita usa o leiaute novo (NT 009) desde 20/10/2026, e a produção passa para ele em 01/12/2026. O app escolhe sozinho (`src/leiaute.ts`). Se a Receita adiar a data, defina `NFSE_LEIAUTE_PRODUCAO=nt004` nas variáveis da Vercel. A biblioteca está numa versão *release candidate* (`0.12.0-rc.1`), a única com o leiaute novo: atualize para a `0.12.0` final quando sair.
 - **IBS/CBS (Reforma Tributária).** Para o Simples Nacional, os campos de IBS/CBS passam a valer em **1º/01/2027**. Antes da primeira nota de 2027, rode `npm update open-nfse` e reveja com o contador se algo muda na nota.
 - **PDF.** É gerado localmente (o serviço oficial de PDF da Receita está suspenso, segundo a documentação da biblioteca usada). O que vale juridicamente é o XML. Use `consultar` para baixar uma nota de novo quando precisar.
 - **Biblioteca.** A comunicação com a Receita (assinatura, mTLS, validação do schema) usa a [open-nfse](https://github.com/fm-s/open-nfse), open source (MIT) e **não oficial**. A versão está fixada no `package.json` para nada mudar sem você saber.
@@ -162,13 +163,58 @@ Nome e endereço da sua empresa **não** vão na DPS: a Receita preenche pelo ca
 
 ---
 
-## 8. Antes de levar para a web (ex.: Vercel)
+## 8. App web (Vercel)
 
-Hoje o app é uma linha de comando que roda **no seu computador**. Para virar app web, quatro coisas precisam mudar antes da primeira nota real:
+Além da linha de comando, o mesmo emissor roda como app web (Next.js) na Vercel, projeto `emissor-nfse`, região São Paulo (`gru1`).
 
-1. **Estado fora de arquivo.** A numeração (`dados/*/estado.json`), a emissão pendente e as notas (`notas/`) ficam em arquivos locais. Na Vercel o disco é temporário e é apagado entre execuções. Sem um banco (ex.: Supabase/Postgres), com trava na hora de reservar o número, e um storage para XML/PDF, a numeração se perde, a proteção contra nota duplicada para de funcionar e os XMLs somem. A lógica a portar está em `src/estado.ts` e `resolverPendente()` em `src/cli.ts`.
-2. **Login obrigatório.** Sem autenticação, qualquer pessoa com a URL emite nota fiscal no seu CNPJ.
-3. **Certificado em variável de ambiente.** O `.pfx` em base64 e a senha vão nas variáveis de ambiente do projeto, nunca no repositório. Quem tiver acesso ao projeto na Vercel tem acesso ao certificado.
-4. **Runtime Node.js, não Edge.** O mTLS e a assinatura XML precisam do runtime Node. Aumente o `maxDuration` da função: a Receita pode demorar (o cliente usa timeout de 60 s).
+**Como ficou resolvido o que faltava para a web:**
 
-O núcleo que monta a nota (`src/dps.ts`), a configuração (`src/config.ts`) e a cotação (`src/cotacao.ts`) podem ser reaproveitados como estão.
+| Problema | Solução |
+|---|---|
+| Estado em arquivo | Banco Postgres (Neon, `emissor-nfse-db`, em São Paulo): empresa, clientes, numeração, emissão pendente e as notas (o XML fica no banco; o PDF é gerado a partir dele na hora do download). A trava contra nota duplicada é um compare-and-set atômico no campo `pendente` (`web/armazem.ts`) |
+| Login | Senha única em `APP_SENHA`, sessão em cookie assinado (12 h). Sem a variável, ninguém entra |
+| Certificado | `CERT_PFX_BASE64` + `CERT_SENHA`, variáveis do tipo *Sensitive* na Vercel |
+| Runtime | Node.js, `maxDuration` de 120 s (`vercel.json`) |
+
+### Variáveis de ambiente (Vercel → projeto → Settings → Environment Variables)
+
+| Variável | Quem preenche | Conteúdo |
+|---|---|---|
+| `DATABASE_URL` (e outras `PG*`/`POSTGRES_*`) | automático | Vêm da integração com o Neon |
+| `APP_SEGREDO` | automático | Chave aleatória das sessões |
+| `APP_SENHA` | você | Senha para entrar no app (mínimo de 12 caracteres) |
+| `CERT_PFX_BASE64` | você | O `.pfx` convertido para base64 (comando abaixo) |
+| `CERT_SENHA` | você | Senha do certificado |
+
+Marque as três como **Sensitive** e os ambientes **Production** e **Preview**. Depois de salvar, faça um *Redeploy* (variável nova só vale no próximo deploy).
+
+Para converter o certificado em base64 e copiar:
+
+```bash
+# macOS
+base64 -i certificado/ecnpj.pfx | pbcopy
+# Linux
+base64 -w0 certificado/ecnpj.pfx
+# Windows (PowerShell)
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("certificado\ecnpj.pfx")) | Set-Clipboard
+```
+
+Quem tem acesso ao projeto na Vercel tem acesso ao certificado. Não compartilhe o projeto.
+
+### Primeiro uso
+
+1. Entre com a `APP_SENHA`.
+2. **Configuração**: preencha a empresa e cadastre os clientes (os mesmos campos dos `.exemplo.json`, com as explicações no formulário).
+3. **Painel**: tudo verde? Clique em "Testar ambiente de testes" para conferir o certificado com a Receita.
+4. **Emitir** em *Testes* primeiro; confira o PDF/XML em **Notas**.
+5. Se você já emitiu notas pela linha de comando nesta série, a numeração do app começa em 1: a Receita responde E0014 e o app avança o contador sozinho (repita a emissão até passar), ou use outra série.
+
+### Desenvolvimento
+
+```bash
+npm run dev          # precisa de DATABASE_URL, APP_SENHA, APP_SEGREDO, CERT_PFX_BASE64, CERT_SENHA
+npm run tipos        # checagem de tipos
+npm run teste:web    # fluxo de emissão contra a Receita simulada (precisa de Postgres local)
+```
+
+`npm run teste:web` precisa de `DATABASE_URL` apontando para um Postgres em `localhost` (o teste apaga as tabelas), `CERT_TESTE_PFX` e `CERT_TESTE_SENHA` (qualquer `.pfx` autoassinado com um CNPJ no nome serve).

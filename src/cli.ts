@@ -19,25 +19,19 @@ import { parseArgs } from 'node:util';
 import {
   Ambiente,
   createInMemoryRetryStore,
-  ExpiredCertificateError,
   ForbiddenError,
   gerarDanfse,
   InvalidCertificateError,
-  InvalidCertificatePasswordError,
   JustificativaCancelamento,
-  NetworkError,
   NfseClient,
   NotFoundError,
-  OpenNfseError,
   parseNfseXml,
   parsePfx,
   ReceitaRejectionError,
-  RuleViolationError,
-  TimeoutError,
   TipoAmbienteDps,
-  TipoTribISSQN,
   UnauthorizedError,
   ValidationError,
+  type Layout,
   type NFSe,
 } from 'open-nfse';
 import type { NfseClientLike } from 'open-nfse/testing';
@@ -45,14 +39,15 @@ import {
   carregarCertificado,
   carregarCliente,
   carregarEmpresa,
-  ErroConfig,
   listarClientes,
   RAIZ,
   type Empresa,
-} from './config.js';
-import { buscarPtax, hojeBrasilia, type Cotacao } from './cotacao.js';
-import { brl, dataBr, montarDps, moeda, preencherDescricao } from './dps.js';
-import { Armazem } from './estado.js';
+} from './config';
+import { buscarPtax, hojeBrasilia, type Cotacao } from './cotacao';
+import { leiauteDe } from './leiaute';
+import { brl, dataBr, montarDps, moeda, preencherDescricao } from './dps';
+import { Armazem } from './estado';
+import { DICAS, explicarErro, observacoesDanfse } from './nucleo';
 
 // ---------------------------------------------------------------------------
 // Utilidades de terminal
@@ -116,8 +111,10 @@ function prepararCertificado(empresa?: Empresa) {
 
 type Api = NfseClientLike;
 
-let fabricaApi = (producao: boolean, pfx: Buffer, senha: string): Api =>
+/** O leiaute do cliente e o da DPS têm que ser o mesmo: calcule uma vez e passe para os dois. */
+let fabricaApi = (producao: boolean, pfx: Buffer, senha: string, layout: Layout = leiauteDe(producao)): Api =>
   new NfseClient({
+    layout,
     ambiente: producao ? Ambiente.Producao : Ambiente.ProducaoRestrita,
     certificado: { pfx, password: senha },
     timeoutMs: 60_000,
@@ -128,7 +125,8 @@ export function usarFabricaApi(f: typeof fabricaApi) {
   fabricaApi = f;
 }
 
-const criarApi = (producao: boolean, pfx: Buffer, senha: string) => fabricaApi(producao, pfx, senha);
+const criarApi = (producao: boolean, pfx: Buffer, senha: string, layout?: Layout) =>
+  fabricaApi(producao, pfx, senha, layout);
 
 // ---------------------------------------------------------------------------
 // Salvar nota autorizada (XML + PDF)
@@ -141,24 +139,6 @@ const slug = (s: string) =>
     .replace(/^-|-$/g, '')
     .toLowerCase()
     .slice(0, 40);
-
-/**
- * Texto extra para o PDF (área "Outras informações", cabem ~2 linhas): o renderer
- * local não mostra a exportação nem as informações complementares por conta própria.
- */
-function observacoesDanfse(nfse: NFSe): string | undefined {
-  const d = nfse.infNFSe.DPS.infDPS;
-  const linha1: string[] = [];
-  if (d.valores.trib.tribMun.tribISSQN === TipoTribISSQN.ExportacaoServico) {
-    linha1.push(`Exportação de serviço (ISSQN não incide), resultado em ${d.valores.trib.tribMun.cPaisResult ?? '—'}.`);
-  }
-  const loc = d.toma?.end?.localidade;
-  if (loc && 'endExt' in loc) {
-    linha1.push(`Tomador: ${loc.endExt.xCidade}, ${loc.endExt.xEstProvReg}, ${loc.endExt.cPais} ${loc.endExt.cEndPost}.`);
-  }
-  const partes = [linha1.join(' '), d.serv.infoCompl?.xInfComp ?? ''].filter(Boolean);
-  return partes.length ? partes.join('\n') : undefined;
-}
 
 async function salvarNota(
   api: Api,
@@ -344,7 +324,8 @@ export async function cmdNota(apelido: string | undefined, v: Record<string, str
   if (c.dias < 30) aviso(`seu certificado vence em ${c.dias} dias — providencie a renovação.`);
 
   const arm = new Armazem(producao);
-  const api = criarApi(producao, c.pfx, c.senha);
+  const layout = leiauteDe(producao);
+  const api = criarApi(producao, c.pfx, c.senha, layout);
   try {
     if (!simular && (await resolverPendente(api, arm)) === 'emitida') {
       console.log('\nSe você precisa de mais uma nota, rode o comando de novo.');
@@ -368,7 +349,7 @@ export async function cmdNota(apelido: string | undefined, v: Record<string, str
     if (descricao.length > 2000) throw new Error('A descrição passou de 2000 caracteres.');
 
     const nDPS = arm.proximoNumero(empresa.serie);
-    const nota = montarDps({ empresa, cliente, nDPS, producao, valorMoeda, cotacao, competencia, descricao });
+    const nota = montarDps({ layout, empresa, cliente, nDPS, producao, valorMoeda, cotacao, competencia, descricao });
 
     // Validação local completa (XSD oficial + assinatura) antes de qualquer envio.
     const previa = await api.emitirDpsPronta(nota.dps, { dryRun: true, skipCepValidation: true });
@@ -550,37 +531,6 @@ export async function cmdPdf(arquivo: string | undefined) {
   const destino = path.resolve(arquivo).replace(/\.xml$/i, '') + '.pdf';
   writeFileSync(destino, pdf);
   ok(`PDF gerado: ${path.relative(process.cwd(), destino)}`);
-}
-
-// ---------------------------------------------------------------------------
-// Erros em português
-
-const DICAS: Record<string, string> = {
-  E0116: 'Sua empresa tem Inscrição Municipal cadastrada: preencha "inscricaoMunicipal" em config/empresa.json.',
-  E0120: 'Sua empresa NÃO tem Inscrição Municipal no cadastro nacional: deixe "inscricaoMunicipal" vazio.',
-  E0010: 'A série precisa estar entre 1 e 49999 (faixa de aplicativo próprio).',
-  E0008: 'O relógio do computador parece adiantado. Acerte a data/hora e tente de novo.',
-  E0015: 'A competência não pode ser depois da data de emissão.',
-  E0016: 'O município ainda não tinha convênio ativo nessa competência.',
-  E1270: 'O convênio do município não está ativo para essa competência.',
-  E0018: 'A competência é anterior à abertura do CNPJ.',
-  E0529: 'A Receita não aceita exportação para esse cenário. Confirme a tributação com o contador.',
-  E0166: 'Regime de apuração do Simples ausente — problema no app, me avise.',
-  E1200: 'Certificado de transmissão inválido (precisa ser e-CNPJ com "Autenticação de Cliente").',
-};
-
-function explicarErro(e: unknown): string {
-  if (e instanceof ErroConfig) return e.message;
-  if (e instanceof InvalidCertificatePasswordError) return 'Senha do certificado incorreta (CERT_SENHA no .env).';
-  if (e instanceof ExpiredCertificateError) return 'O certificado está vencido.';
-  if (e instanceof InvalidCertificateError) return 'Não consegui ler o certificado (.pfx corrompido ou formato errado).';
-  if (e instanceof UnauthorizedError) return 'A Receita recusou o certificado (401).';
-  if (e instanceof ForbiddenError) return 'A Receita recusou o acesso (403): o certificado não tem permissão para esse CNPJ.';
-  if (e instanceof TimeoutError) return 'A Receita demorou demais para responder.';
-  if (e instanceof NetworkError) return 'Sem conexão com a Receita (internet ou servidor fora do ar).';
-  if (e instanceof RuleViolationError || e instanceof ValidationError) return `Validação local: ${e.message}`;
-  if (e instanceof OpenNfseError) return e.message;
-  return e instanceof Error ? e.message : String(e);
 }
 
 function imprimirErro(e: unknown) {
